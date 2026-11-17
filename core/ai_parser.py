@@ -1,6 +1,5 @@
 import json
 import os
-import pandas as pd
 from dotenv import load_dotenv
 from groq import Groq
 
@@ -9,9 +8,7 @@ client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 
 def process_jira_query(query: str, issues: list) -> dict:
-  """Uses Groq to analyze Jira issue context and filter records."""
-  df = pd.DataFrame(issues)
-
+  """Uses Groq to analyze Jira issue context and filter records using pure Python."""
   system_prompt = """
     You are Codegeist Context Copilot, an AI engineering assistant.
     Analyze the user's natural language query against the provided Jira issue records.
@@ -23,7 +20,7 @@ def process_jira_query(query: str, issues: list) -> dict:
     Do not include markdown blocks like ```json, just return raw JSON.
     """
 
-  user_prompt = f"User Query: '{query}'\nJira Issues Summary: {df.to_dict(orient='records')}"
+  user_prompt = f"User Query: '{query}'\nJira Issues Summary: {json.dumps(issues)}"
 
   try:
     chat_completion = client.chat.completions.create(
@@ -43,17 +40,21 @@ def process_jira_query(query: str, issues: list) -> dict:
         "message", "Here are the Jira issues matching your query:"
     )
 
-    filtered_df = df.copy()
-    if f_status != "All" and not filtered_df.empty:
-      filtered_df = filtered_df[
-          filtered_df["status"].str.lower() == f_status.lower()
+    filtered_issues = issues
+    if f_status != "All":
+      filtered_issues = [
+          i
+          for i in filtered_issues
+          if i["status"].lower() == f_status.lower()
       ]
-    if f_prio != "All" and not filtered_df.empty:
-      filtered_df = filtered_df[
-          filtered_df["priority"].str.lower() == f_prio.lower()
+    if f_prio != "All":
+      filtered_issues = [
+          i
+          for i in filtered_issues
+          if i["priority"].lower() == f_prio.lower()
       ]
 
-    return {"message": msg, "data": filtered_df.to_dict(orient="records")}
+    return {"message": msg, "data": filtered_issues}
 
   except Exception as e:
     print(f"Groq AI Parsing Error: {e}")
